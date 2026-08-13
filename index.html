@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>UPI Spendr — Smart UPI Expense Tracker & Splitwise</title>
+  <meta name="description" content="Sellable, production-ready Indian UPI expense tracker with offline SQLite database, recurring bills, Splitwise expense splitting, and bank SMS parsing.">
+  
+  <!-- PWA & Mobile Web App Meta -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0088CC">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="UPI Spendr">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/charts.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- ================= AUTH / LOGIN PAGE ================= -->
+    <div id="auth-screen" class="auth-wrapper" style="display: none;">
+      <div class="auth-card">
+        <div class="auth-header">
+          <div class="auth-logo">⚡</div>
+          <h2 class="auth-title">UPI Spendr</h2>
+          <p class="auth-subtitle">Professional Indian UPI Expense Tracker & Splitwise PWA</p>
+        </div>
+
+        <!-- Demo Credentials Helper Banner -->
+        <div class="auth-hint-banner">
+          <div>
+            <span>🔑 Demo Login:</span>
+            <span class="auth-hint-code">9876543210</span>
+          </div>
+          <div>
+            <span>PIN:</span>
+            <span class="auth-hint-code">1234</span>
+          </div>
+        </div>
+
+        <div class="auth-tabs">
+          <button id="tab-auth-login" class="auth-tab-btn active" onclick="switchAuthTab('login')">📱 Sign In with PIN</button>
+          <button id="tab-auth-register" class="auth-tab-btn" onclick="switchAuthTab('register')">✨ Create Account</button>
+        </div>
+
+        <!-- Sign In Form -->
+        <form id="form-auth-login" class="auth-form">
+          <div class="form-group">
+            <label class="form-label">Registered Mobile Number or UPI ID</label>
+            <input id="login-input-id" type="text" class="form-input" placeholder="e.g. 9876543210 or vishal@okhdfc" value="9876543210" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">4-Digit UPI Security PIN</label>
+            <div style="position: relative;">
+              <input id="login-input-pin" type="password" maxlength="4" class="form-input" placeholder="••••" value="1234" style="letter-spacing: 0.35em; font-size: 1.3rem; text-align: center;" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.8rem; font-size: 0.95rem;">
+            <span>🔒</span> Sign In to SQLite Database
+          </button>
+
+          <div style="text-align: center; margin: 0.15rem 0;">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">— OR —</span>
+          </div>
+
+          <button id="btn-auth-demo" type="button" class="btn btn-purple" onclick="triggerDemoLogin()" style="width: 100%; padding: 0.7rem; font-size: 0.9rem;">
+            <span>⚡</span> 1-Click Instant Demo Login
+          </button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="form-auth-register" class="auth-form" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">Full Name *</label>
+            <input id="reg-input-name" type="text" class="form-input" placeholder="e.g. Vishal Sharma" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Mobile Number (10 digits) *</label>
+            <input id="reg-input-phone" type="tel" maxlength="10" class="form-input" placeholder="9876543210" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Primary UPI ID (Optional)</label>
+            <input id="reg-input-upi" type="text" class="form-input" placeholder="e.g. name@okhdfcbank">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Set 4-Digit Security PIN *</label>
+            <input id="reg-input-pin" type="password" maxlength="4" class="form-input" placeholder="••••" style="letter-spacing: 0.35em; font-size: 1.3rem; text-align: center;" required>
+          </div>
+
+          <button type="submit" class="btn btn-success" style="width: 100%; padding: 0.8rem; font-size: 0.95rem;">
+            <span>✨</span> Create Account in Database
+          </button>
+        </form>
+
+        <div class="auth-security-badge">
+          <span>🛡️</span> All data & dates saved permanently in local SQLite (<code>upi_tracker.db</code>)
+        </div>
+      </div>
+    </div>
+
+    <!-- Immediate resilient auth helper script -->
+    <script>
+      function switchAuthTab(tab) {
+        const tabLogin = document.getElementById('tab-auth-login');
+        const tabRegister = document.getElementById('tab-auth-register');
+        const formLogin = document.getElementById('form-auth-login');
+        const formRegister = document.getElementById('form-auth-register');
+        if (tab === 'login') {
+          tabLogin?.classList.add('active');
+          tabRegister?.classList.remove('active');
+          if (formLogin) formLogin.style.display = 'flex';
+          if (formRegister) formRegister.style.display = 'none';
+        } else {
+          tabRegister?.classList.add('active');
+          tabLogin?.classList.remove('active');
+          if (formLogin) formLogin.style.display = 'none';
+          if (formRegister) formRegister.style.display = 'flex';
+        }
+      }
+
+      async function triggerDemoLogin() {
+        const demoUser = {
+          id: 'usr_demo',
+          name: 'Vishal Sharma',
+          phone: '9876543210',
+          email: 'vishal@example.com',
+          upi_id: 'vishal@okhdfcbank',
+          avatar: '👨‍💼'
+        };
+        try {
+          const res = await fetch('/api/auth/demo', { method: 'POST' });
+          const data = await res.json();
+          if (data && data.user) {
+            localStorage.setItem('upi_current_user', JSON.stringify(data.user));
+          } else {
+            localStorage.setItem('upi_current_user', JSON.stringify(demoUser));
+          }
+        } catch (e) {
+          localStorage.setItem('upi_current_user', JSON.stringify(demoUser));
+        }
+
+        const authScreen = document.getElementById('auth-screen');
+        const mainScreen = document.getElementById('main-app-screen');
+        if (authScreen) authScreen.style.display = 'none';
+        if (mainScreen) mainScreen.style.display = 'block';
+
+        if (window.app && typeof window.app.checkAuthAndRender === 'function') {
+          window.app.checkAuthAndRender();
+        }
+      }
+    </script>
+
+    <!-- ================= MAIN DASHBOARD APP ================= -->
+    <div id="main-app-screen" style="display: block;">
+      
+      <!-- PWA Install Banner -->
+      <div id="pwa-install-banner" class="pwa-install-banner" style="display: none;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="font-size: 1.6rem;">📱</div>
+          <div>
+            <h4>Install UPI Spendr App</h4>
+            <p>Get instant access from your Home Screen with offline support & fast load times!</p>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button id="btn-pwa-install" class="btn btn-sm" style="background: white; color: #0088cc; font-weight: 800; border: none; padding: 0.4rem 0.8rem; border-radius: var(--radius-sm);">Install Now</button>
+          <button id="btn-pwa-dismiss" class="btn-action-icon" style="color: white;">✕</button>
+        </div>
+      </div>
+
+      <!-- Header -->
+      <header class="app-header">
+        <div class="brand-section">
+          <div class="brand-logo">⚡</div>
+          <div class="brand-details">
+            <h1>UPI Spendr <span class="brand-badge">PWA</span></h1>
+            <p>Indian UPI Expense Tracker & Splitwise</p>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs (Desktop / Tablet) -->
+        <nav class="nav-tabs" role="tablist">
+          <button class="nav-tab active" data-tab="dashboard" role="tab">
+            <span>📊</span> Dashboard
+          </button>
+          <button class="nav-tab" data-tab="analytics" role="tab">
+            <span>📈</span> Analytics
+          </button>
+          <button class="nav-tab" data-tab="recurring" role="tab">
+            <span>🔁</span> Recurring & EMIs
+          </button>
+          <button class="nav-tab" data-tab="split" role="tab">
+            <span>👥</span> Splitwise
+          </button>
+          <button class="nav-tab" data-tab="accounts" role="tab">
+            <span>🏦</span> Accounts
+          </button>
+          <button class="nav-tab" data-tab="budgets" role="tab">
+            <span>🎯</span> Budgets
+          </button>
+          <button class="nav-tab" data-tab="sms" role="tab">
+            <span>📩</span> SMS Parser
+          </button>
+          <button class="nav-tab" data-tab="database" role="tab">
+            <span>🗄️</span> DB Console
+          </button>
+        </nav>
+
+        <!-- Quick Actions & User Profile -->
+        <div class="header-actions">
+          <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.7rem; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+            <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Bal:</span>
+            <span id="header-total-balance" style="font-weight: 800; font-family: var(--font-sans); color: var(--text-primary); font-size: 0.9rem;">₹ 0</span>
+            <button id="balance-eye-btn" class="btn-action-icon" title="Toggle balance visibility" style="font-size: 0.8rem;">👁️</button>
+          </div>
+
+          <!-- Notification Bell -->
+          <div class="notif-btn-wrap">
+            <button id="btn-open-notifications" class="btn-action-icon" style="font-size: 1.1rem; padding: 0.35rem 0.5rem; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);" title="Notifications">
+              🔔
+              <span id="notif-count-badge" class="notif-badge-count" style="display: none;">0</span>
+            </button>
+            <div id="notif-popover" class="notif-popover">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border-subtle);">
+                <span style="font-weight: 700; font-size: 0.85rem;">Notifications & Alerts</span>
+                <span id="notif-header-count" style="font-size: 0.7rem; color: var(--text-muted);">0 new</span>
+              </div>
+              <div id="notif-items-list" style="display: flex; flex-direction: column; gap: 0.4rem;">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- PRO Tier Badge Button -->
+          <button id="btn-open-pro" class="btn btn-sm" style="background: linear-gradient(135deg, #f59e0b 0%, #ec4899 100%); color: white; font-weight: 800; border: none;" title="Upgrade to PRO">
+            👑 PRO
+          </button>
+
+          <button id="btn-open-upi-sim" class="btn btn-primary btn-sm" title="Simulate a UPI Payment">
+            <span>⚡</span> Pay
+          </button>
+          <button id="btn-open-sms-parser" class="btn btn-secondary btn-sm" title="Parse Bank SMS">
+            <span>📩</span> SMS
+          </button>
+          <button id="btn-open-add-tx" class="btn btn-success btn-sm" title="Add Transaction">
+            <span>➕</span> Add
+          </button>
+          <button id="theme-toggle-btn" class="btn btn-secondary btn-sm" title="Switch Theme">
+            ☀️ Light
+          </button>
+
+          <!-- User Profile & Logout -->
+          <div id="user-profile-btn" class="user-profile-badge" title="Click to logout or switch account">
+            <div id="user-avatar-icon" class="user-avatar">👨‍💼</div>
+            <span id="user-display-name" class="user-name-text">Vishal</span>
+            <button id="btn-user-logout" class="btn-action-icon delete" style="padding: 0; font-size: 0.75rem;" title="Logout">🚪</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Content Panes -->
+      <main class="main-content">
+        
+        <!-- TAB 1: DASHBOARD -->
+        <section id="tab-dashboard" class="tab-pane active">
+          <!-- KPI Cards Grid -->
+          <div class="grid-4col" style="margin-bottom: 1.25rem;">
+            <div class="stat-card stat-expense">
+              <div class="stat-header">
+                <span class="stat-label">Spent This Month</span>
+                <div class="stat-icon-wrap">↗️</div>
+              </div>
+              <div id="kpi-month-debit" class="stat-value">₹ 0</div>
+              <div class="stat-footer">
+                <span class="trend-pill trend-up-danger">UPI Debits</span>
+                <span>saved in SQLite DB</span>
+              </div>
+            </div>
+
+            <div class="stat-card stat-income">
+              <div class="stat-header">
+                <span class="stat-label">Total Inflow</span>
+                <div class="stat-icon-wrap">↙️</div>
+              </div>
+              <div id="kpi-month-credit" class="stat-value">₹ 0</div>
+              <div class="stat-footer">
+                <span class="trend-pill trend-down-good">Credits / Salary</span>
+                <span>this month</span>
+              </div>
+            </div>
+
+            <div class="stat-card stat-balance">
+              <div class="stat-header">
+                <span class="stat-label">Daily Burn Rate</span>
+                <div class="stat-icon-wrap">🔥</div>
+              </div>
+              <div id="kpi-daily-avg" class="stat-value">₹ 0 / day</div>
+              <div class="stat-footer">
+                <span>Avg spending per day</span>
+              </div>
+            </div>
+
+            <div class="stat-card stat-lite">
+              <div class="stat-header">
+                <span class="stat-label">UPI Lite Wallet</span>
+                <div class="stat-icon-wrap">⚡</div>
+              </div>
+              <div id="kpi-lite-balance" class="stat-value">₹ 0</div>
+              <div class="stat-footer">
+                <span>PIN-less micro balance</span>
+                <button id="btn-topup-lite" class="btn btn-sm btn-purple" style="margin-left: auto; padding: 0.2rem 0.5rem; font-size: 0.7rem;">+ Topup</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Smart Insights AI Bar -->
+          <div class="card" style="margin-bottom: 1.25rem; background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%); border-color: rgba(59, 130, 246, 0.3);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.2rem;">🧠</span>
+                <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary);">Smart Financial Insights & Trends</h3>
+              </div>
+              <span class="badge badge-credit">Auto-Generated</span>
+            </div>
+            <div id="dashboard-insights-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem;">
+              <!-- Populated dynamically by InsightsEngine -->
+            </div>
+          </div>
+
+          <!-- 1-Tap Quick Log Chip Bar -->
+          <div class="quick-log-bar" style="margin-bottom: 1.25rem;">
+            <div class="quick-log-label">
+              <span>⚡ 1-Tap Log:</span>
+            </div>
+            <div class="quick-log-chips">
+              <button class="quick-chip" data-amount="15" data-merchant="Chai Tapri" data-category="food">
+                <span>☕ Chai</span>
+                <span class="chip-amount">₹15</span>
+              </button>
+              <button class="quick-chip" data-amount="40" data-merchant="Auto Rickshaw" data-category="transit">
+                <span>🛺 Auto</span>
+                <span class="chip-amount">₹40</span>
+              </button>
+              <button class="quick-chip" data-amount="150" data-merchant="Lunch Thali" data-category="food">
+                <span>🍛 Lunch</span>
+                <span class="chip-amount">₹150</span>
+              </button>
+              <button class="quick-chip" data-amount="380" data-merchant="Swiggy" data-category="food">
+                <span>🍔 Swiggy</span>
+                <span class="chip-amount">₹380</span>
+              </button>
+              <button class="quick-chip" data-amount="500" data-merchant="Blinkit" data-category="grocery">
+                <span>🛒 Groceries</span>
+                <span class="chip-amount">₹500</span>
+              </button>
+              <button class="quick-chip" data-amount="120" data-merchant="Starbucks / Cafe" data-category="food">
+                <span>☕ Coffee</span>
+                <span class="chip-amount">₹120</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Dashboard Split: Transactions & Sidebar -->
+          <div class="dashboard-layout">
+            <!-- Transactions Section -->
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">Recent UPI Transactions</h2>
+                  <p class="card-subtitle">All details and exact dates stored in SQLite Database</p>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                  <button id="btn-export-csv" class="btn btn-secondary btn-sm" title="Export to Excel / CSV">📊 Export CSV</button>
+                </div>
+              </div>
+
+              <!-- Filters -->
+              <div class="filter-bar">
+                <div class="search-box">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input id="tx-search-input" type="text" class="search-input" placeholder="Search merchant, UTR, or bank...">
+                </div>
+
+                <select id="tx-filter-category" class="filter-select">
+                  <option value="all">All Categories</option>
+                  <option value="food">🍔 Food & Dining</option>
+                  <option value="grocery">🛒 Groceries</option>
+                  <option value="transit">🚕 Transit & Fuel</option>
+                  <option value="shopping">🛍️ Shopping</option>
+                  <option value="bills">⚡ Bills & Utilities</option>
+                  <option value="entertainment">🎬 Entertainment</option>
+                  <option value="health">💊 Health</option>
+                  <option value="investment">📈 Investments</option>
+                  <option value="transfer">💸 Transfers</option>
+                </select>
+
+                <select id="tx-filter-type" class="filter-select">
+                  <option value="all">All Types</option>
+                  <option value="debit">Debits (Spent)</option>
+                  <option value="credit">Credits (Received)</option>
+                  <option value="lite">⚡ UPI Lite Only</option>
+                </select>
+              </div>
+
+              <!-- Transaction Items List -->
+              <div id="tx-list-container" class="tx-list">
+                <!-- Rendered dynamically from SQLite -->
+              </div>
+            </div>
+
+            <!-- Sidebar: Top Merchants & Mini Analytics -->
+            <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+              <!-- Top Merchants -->
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">🏆 Top Merchants</h3>
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">This Month</span>
+                </div>
+                <div id="top-merchants-list" class="merchant-rank-list">
+                  <!-- Rendered dynamically -->
+                </div>
+              </div>
+
+              <!-- Quick SMS Parser Promo Card -->
+              <div class="card" style="background: linear-gradient(135deg, rgba(0, 136, 204, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%); border-color: rgba(59, 130, 246, 0.3);">
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+                  <div style="width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--accent-blue); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
+                    📩
+                  </div>
+                  <div>
+                    <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">Smart SMS Auto-Sync</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Extract amount & payee automatically</div>
+                  </div>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.85rem;">
+                  Got a bank SMS from SBI, HDFC, ICICI or Axis? Paste it to auto-save into the SQLite database.
+                </p>
+                <button id="btn-quick-sms-promo" class="btn btn-primary btn-sm" style="width: 100%;">
+                  Open SMS Parser Box
+                </button>
+              </div>
+
+              <!-- Sound & Audio Controls -->
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">🔊 Soundbox Settings</h3>
+                </div>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button id="sound-toggle-btn" class="btn btn-secondary btn-sm">🔊 Sound: ON</button>
+                  <button id="voice-toggle-btn" class="btn btn-secondary btn-sm">🗣️ Voice: ON</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 2: ANALYTICS & TRENDS -->
+        <section id="tab-analytics" class="tab-pane">
+          <div class="analytics-grid">
+            <!-- Category Donut Chart -->
+            <div class="chart-card">
+              <div class="chart-header">
+                <h3 class="chart-title">🍔 Spending by Category</h3>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Current Month</span>
+              </div>
+              <div class="donut-chart-container">
+                <div class="donut-canvas-box">
+                  <canvas id="chart-category-donut"></canvas>
+                </div>
+                <div id="donut-legend-container" class="donut-legend">
+                  <!-- Rendered dynamically -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Daily Spending Timeline -->
+            <div class="chart-card">
+              <div class="chart-header">
+                <h3 class="chart-title">📅 Daily Spending Trend (Last 14 Days)</h3>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Daily Debits</span>
+              </div>
+              <div class="chart-canvas-wrapper">
+                <canvas id="chart-daily-trend"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 3: RECURRING BILLS, SUBSCRIPTIONS & EMIS -->
+        <section id="tab-recurring" class="tab-pane">
+          <div class="card" style="margin-bottom: 1.25rem;">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">🔁 Recurring Subscriptions, SIPs & EMIs</h2>
+                <p class="card-subtitle">Track Netflix, Spotify, SIPs, Rent & EMIs with due date alerts</p>
+              </div>
+              <button id="btn-open-add-recurring" class="btn btn-primary btn-sm">➕ Add Subscription / EMI</button>
+            </div>
+
+            <!-- Summary KPI -->
+            <div class="grid-4col" style="margin-bottom: 1.25rem;">
+              <div class="stat-card" style="padding: 1rem;">
+                <div class="stat-label">Monthly Commitments</div>
+                <div id="rec-total-monthly" class="stat-value" style="font-size: 1.4rem;">₹ 0</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">fixed monthly outflow</div>
+              </div>
+              <div class="stat-card" style="padding: 1rem;">
+                <div class="stat-label">Active Subscriptions</div>
+                <div id="rec-active-count" class="stat-value" style="font-size: 1.4rem;">0</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">services tracked</div>
+              </div>
+            </div>
+
+            <!-- Recurring Bills Grid -->
+            <div id="recurring-bills-grid" class="recurring-grid">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 4: SPLITWISE GROUPS -->
+        <section id="tab-split" class="tab-pane">
+          <div class="card" style="margin-bottom: 1.25rem;">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">👥 Splitwise Group Ledgers</h2>
+                <p class="card-subtitle">Split trip, dinner & flatmate expenses with automatic UPI settlement matrix</p>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button id="btn-open-create-group" class="btn btn-secondary btn-sm">➕ Create New Group</button>
+                <button id="btn-open-add-group-exp" class="btn btn-primary btn-sm">💸 Add Group Expense</button>
+              </div>
+            </div>
+
+            <!-- Group Selector Tabs -->
+            <div id="split-groups-tabs-container" style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; overflow-x: auto; padding-bottom: 0.5rem;">
+              <!-- Group Tabs -->
+            </div>
+
+            <!-- Active Group View Grid -->
+            <div class="grid-2col">
+              <!-- Left: Expenses in Group -->
+              <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <h3 id="active-group-title" style="font-size: 1.1rem; font-weight: 700;">Group Expenses</h3>
+                  <span id="active-group-total-spent" class="badge badge-credit" style="font-size: 0.85rem;">Total: ₹0</span>
+                </div>
+                <div id="active-group-expenses-list" style="display: flex; flex-direction: column; gap: 0.6rem;">
+                  <!-- Expenses list -->
+                </div>
+              </div>
+
+              <!-- Right: Net Settlement Matrix ("Who owes Whom") & UPI QR -->
+              <div class="card" style="background: var(--bg-surface); border-color: var(--border-default); display: flex; flex-direction: column; gap: 1rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <h3 style="font-size: 1rem; font-weight: 700;">⚖️ Simplified Settlement Matrix</h3>
+                  <span style="font-size: 0.72rem; color: var(--text-muted);">Who Owes Whom</span>
+                </div>
+                
+                <div id="group-settlements-list" style="display: flex; flex-direction: column; gap: 0.6rem;">
+                  <!-- Settlements list -->
+                </div>
+
+                <div style="text-align: center; padding-top: 0.75rem; border-top: 1px dashed var(--border-subtle);">
+                  <div style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">Instant Settlement UPI QR:</div>
+                  <div class="qr-canvas-wrap" style="margin: 0 auto 0.75rem;">
+                    <canvas id="split-qr-canvas"></canvas>
+                  </div>
+                  <div class="upi-deep-link" id="split-upi-uri-text">upi://pay?pa=...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 5: ACCOUNTS & UPI LITE -->
+        <section id="tab-accounts" class="tab-pane">
+          <div class="card" style="margin-bottom: 1.25rem;">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Linked Bank Accounts & RuPay Cards</h2>
+                <p class="card-subtitle">Saved in SQLite <code>accounts</code> table</p>
+              </div>
+            </div>
+            <div id="accounts-cards-grid" class="bank-cards-grid">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 6: BUDGETS & ALERTS -->
+        <section id="tab-budgets" class="tab-pane">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Monthly Category Budgets & Spend Caps</h2>
+                <p class="card-subtitle">Stored in SQLite <code>budgets</code> table</p>
+              </div>
+            </div>
+            <div id="budgets-grid-container" class="budget-grid">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 7: SMS SMART PARSER -->
+        <section id="tab-sms" class="tab-pane">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">📩 Bank SMS & Notification Intelligence</h2>
+                <p class="card-subtitle">Paste transaction SMS or test with 1-click Bank presets</p>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+              <div>
+                <label class="form-label" style="margin-bottom: 0.35rem; display: block;">1-Click Bank Sample SMS:</label>
+                <div id="sms-presets-chips" class="sms-presets-grid">
+                  <!-- Rendered dynamically -->
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Paste SMS Message Text:</label>
+                <textarea id="sms-input-textarea" class="form-textarea" placeholder="Paste your Indian bank SMS here... e.g. 'Dear SBI User, A/c *4921 debited by Rs 380.00 on 14Aug26 transfer to SWIGGY UPI Ref No 422789123456 - SBI'"></textarea>
+              </div>
+
+              <div id="sms-parsed-preview-box" class="sms-parsed-preview">
+                <div style="color: var(--text-muted); text-align: center;">Paste a bank SMS above or select a preset to test parsing</div>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                <button id="btn-import-parsed-sms" class="btn btn-primary">
+                  <span>➕</span> Save Parsed SMS to Database
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 8: DATABASE CONSOLE & LIVE TABLE INSPECTOR -->
+        <section id="tab-database" class="tab-pane">
+          <div class="card" style="margin-bottom: 1.25rem;">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">🗄️ SQLite Database Console & Status</h2>
+                <p class="card-subtitle">Live database health, file stats, and raw table viewer</p>
+              </div>
+              <button id="btn-refresh-db-stats" class="btn btn-secondary btn-sm">🔄 Refresh DB Status</button>
+            </div>
+
+            <div class="grid-4col" style="margin-bottom: 1.25rem;">
+              <div class="stat-card" style="padding: 1rem;">
+                <div class="stat-label">Database File</div>
+                <div style="font-size: 1.1rem; font-weight: 800; color: var(--accent-blue); font-family: var(--font-mono); margin-top: 0.25rem;">upi_tracker.db</div>
+                <div id="db-file-size" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">Size: -- KB</div>
+              </div>
+              <div class="stat-card" style="padding: 1rem;">
+                <div class="stat-label">Total Transactions</div>
+                <div id="db-count-transactions" class="stat-value" style="font-size: 1.3rem;">0</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">in <code>transactions</code> table</div>
+              </div>
+              <div class="stat-card" style="padding: 1rem;">
+                <div class="stat-label">Linked Accounts</div>
+                <div id="db-count-accounts" class="stat-value" style="font-size: 1.3rem;">0</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">in <code>accounts</code> table</div>
+              </div>
+              <div class="stat-card" style="padding: 1rem;">
+                <div class="stat-label">Registered Users</div>
+                <div id="db-count-users" class="stat-value" style="font-size: 1.3rem;">0</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">in <code>users</code> table</div>
+              </div>
+            </div>
+
+            <div>
+              <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-primary);">📊 Raw Database Records (SQLite Live View)</h3>
+              <div style="overflow-x: auto; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); max-height: 320px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left;">
+                  <thead>
+                    <tr style="background: var(--bg-card); border-bottom: 1px solid var(--border-default); color: var(--text-muted);">
+                      <th style="padding: 0.6rem 0.8rem;">ID</th>
+                      <th style="padding: 0.6rem 0.8rem;">Timestamp / Date</th>
+                      <th style="padding: 0.6rem 0.8rem;">Type</th>
+                      <th style="padding: 0.6rem 0.8rem;">Amount</th>
+                      <th style="padding: 0.6rem 0.8rem;">Merchant</th>
+                      <th style="padding: 0.6rem 0.8rem;">Category</th>
+                      <th style="padding: 0.6rem 0.8rem;">Bank (A/C)</th>
+                      <th style="padding: 0.6rem 0.8rem;">UPI Ref (UTR)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="db-raw-table-body">
+                    <!-- Loaded dynamically from SQLite -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Business & Legal Footer -->
+        <footer style="margin-top: 2rem; margin-bottom: 1.5rem; padding: 1.25rem; background: var(--bg-surface-soft); border-radius: var(--radius-lg); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+          <div style="font-size: 0.78rem; color: var(--text-muted);">
+            <div>© 2026 UPI Spendr App. 100% Offline & Private SQLite Database (<code>upi_tracker.db</code>).</div>
+            <div style="margin-top: 0.25rem;">
+              <a href="#" id="link-privacy-policy" style="color: var(--accent-blue); text-decoration: underline; margin-right: 0.75rem;">Privacy Policy</a>
+              <a href="#" id="link-terms-service" style="color: var(--accent-blue); text-decoration: underline; margin-right: 0.75rem;">Terms of Service</a>
+              <a href="#" id="link-monetization-plan" style="color: var(--accent-blue); text-decoration: underline;">PRO Pricing Plan</a>
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+            <button id="btn-export-json" class="btn btn-secondary btn-sm">💾 Backup JSON</button>
+            <label class="btn btn-secondary btn-sm" style="cursor: pointer;">
+              📥 Restore JSON
+              <input id="input-import-json" type="file" accept=".json" style="display: none;">
+            </label>
+            <button id="btn-reload-sample" class="btn btn-secondary btn-sm">🔄 Reload Sample DB</button>
+            <button id="btn-clear-all" class="btn btn-danger btn-sm">🗑️ Clear DB Data</button>
+          </div>
+        </footer>
+      </main>
+
+      <!-- Mobile Bottom Navigation Bar -->
+      <div class="mobile-bottom-nav">
+        <button class="mobile-nav-item active" data-tab="dashboard">
+          <span>📊</span>
+          <span>Home</span>
+        </button>
+        <button class="mobile-nav-item" data-tab="recurring">
+          <span>🔁</span>
+          <span>Recurring</span>
+        </button>
+        <button class="mobile-nav-item" data-tab="split">
+          <span>👥</span>
+          <span>Split</span>
+        </button>
+        <button class="mobile-nav-item" data-tab="analytics">
+          <span>📈</span>
+          <span>Trends</span>
+        </button>
+        <button class="mobile-nav-item" data-tab="database">
+          <span>🗄️</span>
+          <span>Database</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- MODAL 1: ADD MANUAL TRANSACTION -->
+    <div id="modal-add-tx" class="modal-backdrop">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">➕ Add UPI Transaction to Database</h3>
+          <button class="modal-close">✕</button>
+        </div>
+        <form id="form-add-tx">
+          <div class="modal-body">
+            <div class="grid-2col">
+              <div class="form-group">
+                <label class="form-label">Transaction Type</label>
+                <select id="input-tx-type" class="form-select">
+                  <option value="debit">Debit (Spent / Sent)</option>
+                  <option value="credit">Credit (Received / Salary)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Amount (₹) *</label>
+                <input id="input-tx-amount" type="number" step="0.01" class="form-input" placeholder="e.g. 350" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Merchant / Payee Name *</label>
+              <input id="input-tx-merchant" type="text" class="form-input" placeholder="e.g. Swiggy, Blinkit, Chai Point" required>
+            </div>
+
+            <div class="grid-2col">
+              <div class="form-group">
+                <label class="form-label">Category</label>
+                <select id="input-tx-category" class="form-select">
+                  <option value="food">🍔 Food & Dining</option>
+                  <option value="grocery">🛒 Groceries & Mart</option>
+                  <option value="transit">🚕 Transit & Fuel</option>
+                  <option value="shopping">🛍️ Shopping</option>
+                  <option value="bills">⚡ Bills & Utilities</option>
+                  <option value="entertainment">🎬 Entertainment</option>
+                  <option value="health">💊 Health & Pharmacy</option>
+                  <option value="investment">📈 Investments</option>
+                  <option value="transfer">💸 Transfer / P2P</option>
+                  <option value="other">🏷️ Others</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Debited / Credited Account</label>
+                <select id="input-tx-account" class="form-select">
+                  <!-- Populated dynamically -->
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Date & Time *</label>
+              <input id="input-tx-datetime" type="datetime-local" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Note / Description (Optional)</label>
+              <input id="input-tx-note" type="text" class="form-input" placeholder="e.g. Lunch with team">
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0;">
+              <input id="input-tx-lite" type="checkbox" style="width: 16px; height: 16px; cursor: pointer;">
+              <label for="input-tx-lite" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); cursor: pointer;">
+                ⚡ Paid via UPI Lite (PIN-less micro payment)
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+            <button type="submit" class="btn btn-success">Save to SQLite Database</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL 2: ADD RECURRING BILL / EMI -->
+    <div id="modal-add-recurring" class="modal-backdrop">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">🔁 Add Recurring Subscription or EMI</h3>
+          <button class="modal-close">✕</button>
+        </div>
+        <form id="form-add-recurring">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Subscription / Bill Name *</label>
+              <input id="rec-input-name" type="text" class="form-input" placeholder="e.g. Netflix, Car EMI, HDFC SIP" required>
+            </div>
+
+            <div class="grid-2col">
+              <div class="form-group">
+                <label class="form-label">Amount (₹) *</label>
+                <input id="rec-input-amount" type="number" step="0.01" class="form-input" placeholder="e.g. 649" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Category</label>
+                <select id="rec-input-category" class="form-select">
+                  <option value="entertainment">🎬 Entertainment / OTT</option>
+                  <option value="bills">⚡ Bills & Utilities</option>
+                  <option value="investment">📈 SIP / Investment</option>
+                  <option value="other">🏷️ Other EMI / Rent</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid-2col">
+              <div class="form-group">
+                <label class="form-label">Due Day of Month (1-28)</label>
+                <input id="rec-input-day" type="number" min="1" max="28" class="form-input" value="15" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Frequency</label>
+                <select id="rec-input-freq" class="form-select">
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                  <option value="quarterly">Quarterly</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0;">
+              <input id="rec-input-autopay" type="checkbox" style="width: 16px; height: 16px; cursor: pointer;">
+              <label for="rec-input-autopay" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); cursor: pointer;">
+                🔄 UPI AutoPay Enabled (Bank mandates)
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save to SQLite Database</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL 3: CREATE SPLIT GROUP -->
+    <div id="modal-create-group" class="modal-backdrop">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">👥 Create Splitwise Group</h3>
+          <button class="modal-close">✕</button>
+        </div>
+        <form id="form-create-group">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Group Name *</label>
+              <input id="grp-input-name" type="text" class="form-input" placeholder="e.g. Manali Road Trip, Flat 301" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Description (Optional)</label>
+              <input id="grp-input-desc" type="text" class="form-input" placeholder="e.g. Shared expenses for hotel & food">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Group Category</label>
+              <select id="grp-input-category" class="form-select">
+                <option value="trip">🌴 Vacation / Trip</option>
+                <option value="flat">🏠 Flatmates / Rent</option>
+                <option value="dinner">🍕 Outing / Dining</option>
+                <option value="other">🏷️ Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Group in Database</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL 4: ADD GROUP EXPENSE -->
+    <div id="modal-add-group-exp" class="modal-backdrop">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">💸 Add Shared Expense to Group</h3>
+          <button class="modal-close">✕</button>
+        </div>
+        <form id="form-add-group-exp">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Expense Title *</label>
+              <input id="exp-input-title" type="text" class="form-input" placeholder="e.g. Resort Booking, Dinner" required>
+            </div>
+
+            <div class="grid-2col">
+              <div class="form-group">
+                <label class="form-label">Total Amount (₹) *</label>
+                <input id="exp-input-amount" type="number" step="0.01" class="form-input" placeholder="e.g. 2400" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Paid By</label>
+                <select id="exp-select-payer" class="form-select">
+                  <!-- Populated dynamically -->
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+            <button type="submit" class="btn btn-success">Record in Splitwise Ledger</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL 5: PRIVACY POLICY & TERMS OF SERVICE -->
+    <div id="modal-privacy-terms" class="modal-backdrop">
+      <div class="modal-dialog" style="max-width: 620px;">
+        <div class="modal-header">
+          <h3 class="modal-title">🛡️ Privacy Policy & Terms of Service</h3>
+          <button class="modal-close">✕</button>
+        </div>
+        <div class="modal-body" style="font-size: 0.85rem; line-height: 1.6; color: var(--text-secondary);">
+          <h4 style="color: var(--text-primary); font-size: 0.95rem; margin-bottom: 0.35rem;">1. Financial Data Ownership & Zero Cloud Tracking</h4>
+          <p>UPI Spendr operates strictly with <strong>local storage and client-side database models</strong> (<code>upi_tracker.db</code>). We never sell, transmit, or monetize your bank account numbers, SMS logs, or UPI PINs to third-party advertising networks.</p>
+
+          <h4 style="color: var(--text-primary); font-size: 0.95rem; margin-top: 0.75rem; margin-bottom: 0.35rem;">2. Security & UPI Standard Compliance</h4>
+          <p>All UPI links are built using the official NPCI Specification (<code>upi://pay</code>). PIN verification in the simulator is purely sandboxed and never transmits real banking credentials.</p>
+
+          <h4 style="color: var(--text-primary); font-size: 0.95rem; margin-top: 0.75rem; margin-bottom: 0.35rem;">3. Data Export & Right to Erasure</h4>
+          <p>You maintain full control over your financial records. You can download a complete CSV or JSON backup of your database, or wipe all records permanently with one click.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" onclick="app.closeAllModals()">I Understand & Agree</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 6: PRO TIER MONETIZATION SHOWCASE -->
+    <div id="modal-pro-tier" class="modal-backdrop">
+      <div class="modal-dialog" style="max-width: 600px;">
+        <div class="modal-header">
+          <h3 class="modal-title">👑 Upgrade to UPI Spendr PRO</h3>
+          <button class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="pro-pricing-grid">
+            <!-- Free Tier -->
+            <div class="pricing-card">
+              <div>
+                <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-muted);">STARTER PLAN</div>
+                <div style="font-size: 1.6rem; font-weight: 800; margin: 0.35rem 0;">₹0 <span style="font-size: 0.75rem; font-weight: 500;">/ forever</span></div>
+                <ul style="font-size: 0.8rem; color: var(--text-secondary); list-style: none; display: flex; flex-direction: column; gap: 0.4rem;">
+                  <li>✓ Unlimited UPI Transactions</li>
+                  <li>✓ Persistent SQLite Database</li>
+                  <li>✓ Bank SMS Parser</li>
+                  <li>✓ 1 Splitwise Group</li>
+                </ul>
+              </div>
+              <button class="btn btn-secondary btn-sm" disabled>Current Active Plan</button>
+            </div>
+
+            <!-- PRO Tier -->
+            <div class="pricing-card featured">
+              <div>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div style="font-size: 0.9rem; font-weight: 700; color: var(--accent-blue);">PRO FINTECH</div>
+                  <span class="pro-banner-chip">POPULAR</span>
+                </div>
+                <div style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin: 0.35rem 0;">₹99 <span style="font-size: 0.75rem; font-weight: 500; color: var(--text-muted);">/ year</span></div>
+                <ul style="font-size: 0.8rem; color: var(--text-secondary); list-style: none; display: flex; flex-direction: column; gap: 0.4rem;">
+                  <li>✓ <strong>Unlimited Splitwise Groups</strong></li>
+                  <li>✓ <strong>Auto-Recurring EMI & SIP Alerts</strong></li>
+                  <li>✓ <strong>PDF Financial Reports & Tax Summary</strong></li>
+                  <li>✓ <strong>Multi-device Cloud Sync Option</strong></li>
+                  <li>✓ <strong>VIP Soundbox Voice Customization</strong></li>
+                </ul>
+              </div>
+              <button id="btn-activate-demo-pro" class="btn btn-primary btn-sm" style="font-weight: 800;">⚡ Activate PRO Features</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 7: SMS PARSER MODAL -->
+    <div id="modal-sms-parser" class="modal-backdrop">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">📩 Parse Bank SMS to Database</h3>
+          <button class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size: 0.8rem; color: var(--text-muted);">
+            Paste any Indian bank debit/credit notification SMS to automatically extract and save the transaction into SQLite.
+          </p>
+          <div class="form-group">
+            <textarea id="modal-sms-textarea" class="form-textarea" placeholder="Paste SMS here..."></textarea>
+          </div>
+          <div id="modal-sms-preview" class="sms-parsed-preview">
+            <div style="color: var(--text-muted); text-align: center;">Paste a message above to preview extraction</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-modal-cancel">Close</button>
+          <button id="btn-modal-import-sms" type="button" class="btn btn-primary">Save to Database</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 8: UPI PAYMENT SIMULATOR -->
+    <div id="modal-upi-sim" class="modal-backdrop">
+      <div class="modal-dialog" style="max-width: 380px;">
+        <div class="modal-header">
+          <h3 class="modal-title">⚡ UPI Payment Simulator</h3>
+          <button class="modal-close">✕</button>
+        </div>
+        <div class="modal-body upi-sim-container">
+          <div class="upi-sim-app-badge">
+            <span>🛡️ NPCI UPI 2.0 Secure</span>
+          </div>
+
+          <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center;">
+            <button id="sim-preset-swiggy" class="btn btn-sm btn-secondary">Swiggy ₹350</button>
+            <button id="sim-preset-uber" class="btn btn-sm btn-secondary">Uber ₹180</button>
+            <button id="sim-preset-blinkit" class="btn btn-sm btn-secondary">Blinkit ₹480</button>
+            <button id="sim-preset-chai" class="btn btn-sm btn-secondary">Chai ₹20</button>
+          </div>
+
+          <div class="grid-2col" style="width: 100%;">
+            <div class="form-group">
+              <label class="form-label">Paying To</label>
+              <input id="sim-input-merchant" type="text" class="form-input" value="Swiggy">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Category</label>
+              <select id="sim-select-category" class="form-select">
+                <option value="food">🍔 Food</option>
+                <option value="grocery">🛒 Grocery</option>
+                <option value="transit">🚕 Transit</option>
+                <option value="shopping">🛍️ Shopping</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" style="width: 100%;">
+            <label class="form-label">From Account</label>
+            <select id="sim-select-account" class="form-select">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+
+          <div class="form-group" style="width: 100%;">
+            <label class="form-label">Amount (₹)</label>
+            <input id="sim-input-amount" type="number" class="form-input" style="font-size: 1.3rem; font-weight: 800; text-align: center;" value="350">
+          </div>
+
+          <div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.35rem;">Enter UPI PIN</div>
+            <div class="upi-sim-pin-dots">
+              <div id="sim-pin-1" class="upi-sim-pin-dot"></div>
+              <div id="sim-pin-2" class="upi-sim-pin-dot"></div>
+              <div id="sim-pin-3" class="upi-sim-pin-dot"></div>
+              <div id="sim-pin-4" class="upi-sim-pin-dot"></div>
+            </div>
+          </div>
+
+          <!-- Keypad -->
+          <div class="upi-sim-keypad">
+            <button class="upi-key-btn" data-val="1">1</button>
+            <button class="upi-key-btn" data-val="2">2</button>
+            <button class="upi-key-btn" data-val="3">3</button>
+            <button class="upi-key-btn" data-val="4">4</button>
+            <button class="upi-key-btn" data-val="5">5</button>
+            <button class="upi-key-btn" data-val="6">6</button>
+            <button class="upi-key-btn" data-val="7">7</button>
+            <button class="upi-key-btn" data-val="8">8</button>
+            <button class="upi-key-btn" data-val="9">9</button>
+            <button class="upi-key-btn" data-val="back">⌫</button>
+            <button class="upi-key-btn" data-val="0">0</button>
+            <button class="upi-key-btn" data-val="submit" style="background: var(--accent-blue); color: white;">✓</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 9: UPI DIGITAL RECEIPT -->
+    <div id="modal-receipt" class="modal-backdrop">
+      <div class="modal-dialog" style="max-width: 420px;">
+        <div class="modal-header">
+          <h3 class="modal-title">🧾 UPI Payment Receipt</h3>
+          <button class="modal-close">✕</button>
+        </div>
+        <div id="receipt-modal-content" class="modal-body">
+          <!-- Dynamic Receipt Content -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" onclick="app.closeAllModals()">Done</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
